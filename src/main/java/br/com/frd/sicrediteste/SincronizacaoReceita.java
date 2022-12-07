@@ -26,96 +26,25 @@ agencia;conta;saldo;status
 package br.com.frd.sicrediteste;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVPrinter;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.text.ParseException;
-import java.util.List;
-import java.util.stream.Collectors;
+import org.springframework.context.annotation.Bean;
 
 @Slf4j
 @SpringBootApplication
-public class SincronizacaoReceita {
-
-    private static final char CSV_LIMITER = ';';
-
+public class SincronizacaoReceita implements CommandLineRunner {
     public static void main(String[] args) {
         SpringApplication.run(SincronizacaoReceita.class, args);
-        final var fileUserDir = System.getProperty("user.dir");
-        var filePath = fileUserDir + "/" + args[0];
-        var data = readRecords(filePath);
-        sendDataToReceita(data);
-        printData(data);
     }
 
-    private static List<DadosConta> readRecords(String file) {
-        var csvFormatReader = CSVFormat.Builder.create()
-                .setHeader()
-                .setDelimiter(CSV_LIMITER)
-                .build();
-        try (var reader = Files.newBufferedReader(Paths.get(file));
-             var parser = csvFormatReader.parse(reader)) {
-
-            if(!parser.getHeaderNames().containsAll(List.of("agencia", "conta", "saldo", "status"))
-            && parser.getHeaderNames().size() != 4){
-                log.error("Cabecalho invalido!");
-                throw new RuntimeException();
-            }
-
-            return parser.getRecords().stream()
-                    .map(record -> {
-                        try {
-                            return DadosConta.of(record);
-                        } catch (ParseException e) {
-                            log.error("Saldo da conta " + record.get("conta") + " invalido!");
-                            throw new RuntimeException(e);
-                        }
-                    })
-                    .collect(Collectors.toList());
-
-        } catch (IOException e) {
-            throw new RuntimeException("Arquivo nao encontrado!");
-        }
+    @Bean
+    public SincronizacaoService getSincronizacaoService(){
+        return  new SincronizacaoService();
     }
 
-    private static void sendDataToReceita(List<DadosConta> data) {
-        var receitaService = new ReceitaService();
-        data.forEach(conta ->{
-            boolean atualizado = false;
-            try {
-                atualizado = receitaService.atualizarConta(conta.getAgencia(), conta.getConta().replace("-", ""), conta.getSaldo(), conta.getStatus());
-            } catch (InterruptedException e) {
-                log.error("Erro no servico da Receita!");
-            }
-            conta.setAtualizado(atualizado ? "atualizado" : "nao atualizado");
-        });
+    @Override
+    public void run(String... args) throws Exception {
+        getSincronizacaoService().sincronizar(args[0]);
     }
-
-    private static void printData(List<DadosConta> data) {
-        var csvFormatWriter = CSVFormat.Builder.create()
-                .setHeader("agencia", "conta", "saldo", "status", "resultado")
-                .setDelimiter(CSV_LIMITER)
-                .build();
-
-        try (var writer = Files.newBufferedWriter(Paths.get("./resultado.csv"));
-             var printer = new CSVPrinter(writer, csvFormatWriter)) {
-
-            data.forEach(conta -> {
-                try {
-                    printer.printRecord(conta.getAgencia(), conta.getConta(), conta.getSaldo(), conta.getStatus(), conta.getAtualizado());
-                } catch (IOException e) {
-                    log.error("Nao foi possivel imprimir as informacoes da conta:" + conta.getConta());
-                }
-            });
-            printer.flush();
-        } catch (IOException e) {
-            log.error("Erro ao criar arquivo de resultados!");
-        }
-    }
-
 }

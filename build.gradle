@@ -5,7 +5,6 @@ plugins {
 }
 
 group = 'br.com.frd'
-version = '0.0.1-SNAPSHOT'
 sourceCompatibility = '17'
 
 configurations {
@@ -24,8 +23,20 @@ dependencies {
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	implementation 'org.apache.commons:commons-csv:1.9.0'
+	testImplementation 'org.assertj:assertj-core:3.23.1'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+jar {
+	archiveBaseName='SincronizacaoReceita'
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	manifest {
+		attributes 'Main-Class': 'br.com.frd.sicrediteste.SincronizacaoReceita'
+	}
+	from {
+		configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+	}
 }
